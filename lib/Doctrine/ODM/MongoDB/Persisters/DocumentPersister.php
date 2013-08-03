@@ -347,7 +347,7 @@ class DocumentPersister
     {
         $class = $this->dm->getClassMetadata(get_class($document));
         $data = $this->collection->findOne(array('_id' => $id));
-        $data = $this->hydratorFactory->hydrate($document, $data);
+        $data = $this->hydratorFactory->hydrate($class, $document, $data);
         $this->uow->setOriginalDocumentData($document, $data);
     }
 
@@ -640,7 +640,7 @@ class DocumentPersister
                 $embeddedMetadata = $this->dm->getClassMetadata($className);
                 $embeddedDocumentObject = $embeddedMetadata->newInstance();
 
-                $data = $this->hydratorFactory->hydrate($embeddedDocumentObject, $embeddedDocument);
+                $data = $this->hydratorFactory->hydrate($embeddedMetadata, $embeddedDocumentObject, $embeddedDocument);
                 $this->uow->registerManaged($embeddedDocumentObject, null, $data);
                 $this->uow->setParentAssociation($embeddedDocumentObject, $mapping, $owner, $mapping['name'] . '.' . $key);
                 if ($mapping['strategy'] === 'set') {
@@ -716,7 +716,7 @@ class DocumentPersister
             $documents = $cursor->toArray();
             foreach ($documents as $documentData) {
                 $document = $this->uow->getById((string) $documentData['_id'], $class->rootDocumentName);
-                $data = $this->hydratorFactory->hydrate($document, $documentData);
+                $data = $this->hydratorFactory->hydrate($class, $document, $documentData);
                 $this->uow->setOriginalDocumentData($document, $data);
                 $document->__isInitialized__ = true;
                 if ($sorted) {

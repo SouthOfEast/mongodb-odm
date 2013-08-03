@@ -329,7 +329,7 @@ EOF
             \$embeddedMetadata = \$this->dm->getClassMetadata(\$className);
             \$return = \$embeddedMetadata->newInstance();
 
-            \$embeddedData = \$this->dm->getHydratorFactory()->hydrate(\$return, \$embeddedDocument, \$hints);
+            \$embeddedData = \$this->dm->getHydratorFactory()->hydrate(\$embeddedMetadata, \$return, \$embeddedDocument, \$hints);
             \$this->unitOfWork->registerManaged(\$return, null, \$embeddedData);
             \$this->unitOfWork->setParentAssociation(\$return, \$this->class->fieldMappings['%2\$s'], \$document, '%1\$s');
 
@@ -373,7 +373,7 @@ class $hydratorClassName implements HydratorInterface
         \$this->class = \$class;
     }
 
-    public function hydrate(\$document, \$data, array \$hints = array())
+    public function hydrate(ClassMetadata \$metadata, \$document, \$data, array \$hints = array())
     {
         \$hydratedData = array();
 %s        return \$hydratedData;
@@ -390,14 +390,14 @@ EOF
     /**
      * Hydrate array of MongoDB document data into the given document object.
      *
+     * @param ClassMetadata $metadata The ClassMetadata instance for the passed $document.
      * @param object $document  The document object to hydrate the data into.
      * @param array $data The array of document data.
      * @param array $hints Any hints to account for during reconstitution/lookup of the document.
      * @return array $values The array of hydrated values.
      */
-    public function hydrate($document, $data, array $hints = array())
+    public function hydrate(ClassMetadata $metadata, $document, $data, array $hints = array())
     {
-        $metadata = $this->dm->getClassMetadata(get_class($document));
         // Invoke preLoad lifecycle events and listeners
         if (isset($metadata->lifecycleCallbacks[Events::preLoad])) {
             $args = array(&$data);
@@ -416,7 +416,7 @@ EOF
             }
         }
 
-        $data = $this->getHydratorFor($metadata->name)->hydrate($document, $data, $hints);
+        $data = $this->getHydratorFor($metadata->name)->hydrate($metadata, $document, $data, $hints);
         if ($document instanceof Proxy) {
             $document->__isInitialized__ = true;
         }

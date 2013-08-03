@@ -515,11 +515,11 @@ class UnitOfWork implements PropertyChangedListener
      */
     private function computeSingleDocumentChangeSet($document)
     {
-        if ($this->getDocumentState($document) !== self::STATE_MANAGED) {
+        $class = $this->dm->getClassMetadata(get_class($document));
+
+        if ($this->getDocumentState($class, $document) !== self::STATE_MANAGED) {
             throw new \InvalidArgumentException("Document has to be managed for single computation " . self::objToStr($document));
         }
-
-        $class = $this->dm->getClassMetadata(get_class($document));
 
         if ($class->isChangeTrackingDeferredImplicit()) {
             $this->persist($document);
@@ -574,9 +574,8 @@ class UnitOfWork implements PropertyChangedListener
      * @param object $document
      * @return array
      */
-    public function getDocumentActualData($document)
+    public function getDocumentActualData(ClassMetadata $class, $document)
     {
-        $class = $this->dm->getClassMetadata(get_class($document));
         $actualData = array();
         foreach ($class->reflFields as $name => $refProp) {
             $mapping = $class->fieldMappings[$name];
@@ -657,7 +656,7 @@ class UnitOfWork implements PropertyChangedListener
     private function computeOrRecomputeChangeSet(ClassMetadata $class, $document, $recompute = false)
     {
         $oid = spl_object_hash($document);
-        $actualData = $this->getDocumentActualData($document);
+        $actualData = $this->getDocumentActualData($class, $document);
         $isNewDocument = ! isset($this->originalDocumentData[$oid]);
         if ($isNewDocument) {
             // Document is either NEW or MANAGED but not yet fully persisted (only has an id).
@@ -879,7 +878,7 @@ class UnitOfWork implements PropertyChangedListener
         $count = 0;
         foreach ($value as $key => $entry) {
             $targetClass = $this->dm->getClassMetadata(get_class($entry));
-            $state = $this->getDocumentState($entry, self::STATE_NEW);
+            $state = $this->getDocumentState($targetClass, $entry, self::STATE_NEW);
             $oid = spl_object_hash($entry);
 
             // Handle "set" strategy for multi-level hierarchy
@@ -1571,17 +1570,17 @@ class UnitOfWork implements PropertyChangedListener
      *       populated identifier, whether it is generated or manually assigned, as
      *       DETACHED. This can be incorrect for manually assigned identifiers.
      *
+     * @param ClassMetadata $class
      * @param object $document
      * @param integer $assume The state to assume if the state is not yet known. This is usually
      *                        used to avoid costly state lookups, in the worst case with a database
      *                        lookup.
      * @return int The document state.
      */
-    public function getDocumentState($document, $assume = null)
+    public function getDocumentState(ClassMetadata $class, $document, $assume = null)
     {
         $oid = spl_object_hash($document);
         if ( ! isset($this->documentStates[$oid])) {
-            $class = $this->dm->getClassMetadata(get_class($document));
             if ($class->isEmbeddedDocument) {
                 return self::STATE_NEW;
             }
@@ -1607,7 +1606,7 @@ class UnitOfWork implements PropertyChangedListener
                             return self::STATE_DETACHED;
                         } else {
                             // db lookup
-                            if ($this->getDocumentPersister(get_class($document))->exists($document)) {
+                            if ($this->getDocumentPersister($class->name)->exists($document)) {
                                 return self::STATE_DETACHED;
                             } else {
                                 return self::STATE_NEW;
@@ -1778,7 +1777,7 @@ class UnitOfWork implements PropertyChangedListener
 
         $class = $this->dm->getClassMetadata(get_class($document));
 
-        $documentState = $this->getDocumentState($document, self::STATE_NEW);
+        $documentState = $this->getDocumentState($class, $document, self::STATE_NEW);
         switch ($documentState) {
             case self::STATE_MANAGED:
                 // Nothing to do, except if policy is "deferred explicit"
@@ -1842,7 +1841,7 @@ class UnitOfWork implements PropertyChangedListener
         $visited[$oid] = $document; // mark visited
 
         $class = $this->dm->getClassMetadata(get_class($document));
-        $documentState = $this->getDocumentState($document);
+        $documentState = $this->getDocumentState($class, $document);
         switch ($documentState) {
             case self::STATE_NEW:
             case self::STATE_REMOVED:
@@ -1965,7 +1964,7 @@ class UnitOfWork implements PropertyChangedListener
         // an extra db-roundtrip this way. If it is not MANAGED but has an identity,
         // we need to fetch it from the db anyway in order to merge.
         // MANAGED documents are ignored by the merge operation.
-        if ($this->getDocumentState($document, self::STATE_DETACHED) == self::STATE_MANAGED) {
+        if ($this->getDocumentState($class, $document, self::STATE_DETACHED) == self::STATE_MANAGED) {
             $managedCopy = $document;
         } else {
             $id = null;
@@ -1982,7 +1981,7 @@ class UnitOfWork implements PropertyChangedListener
                 $managedCopy = $this->tryGetById($id, $class->rootDocumentName);
                 if ($managedCopy) {
                     // We have the entity in-memory already, just make sure its not removed.
-                    if ($this->getDocumentState($managedCopy) == self::STATE_REMOVED) {
+                    if ($this->getDocumentState($class, $managedCopy) == self::STATE_REMOVED) {
                         throw new \InvalidArgumentException('Removed entity detected during merge.'
                             . ' Can not merge with a removed entity.');
                     }
@@ -2023,7 +2022,8 @@ class UnitOfWork implements PropertyChangedListener
                             // do not merge fields marked lazy that have not been fetched.
                             continue;
                         } elseif ( ! isset($assoc2['embedded']) && ! $assoc2['isCascadeMerge']) {
-                            if ($this->getDocumentState($other, self::STATE_DETACHED) == self::STATE_MANAGED) {
+                            $class = $this->dm->getClassMetadata(get_class($other));
+                            if ($this->getDocumentState($class, $other, self::STATE_DETACHED) == self::STATE_MANAGED) {
                                 $prop->setValue($managedCopy, $other);
                             } else {
                                 $targetDocument = isset($assoc2['targetDocument']) ? $assoc2['targetDocument'] : get_class($other);
@@ -2118,7 +2118,9 @@ class UnitOfWork implements PropertyChangedListener
 
         $visited[$oid] = $document; // mark visited
 
-        switch ($this->getDocumentState($document, self::STATE_DETACHED)) {
+        $class = $this->dm->getClassMetadata(get_class($document));
+
+        switch ($this->getDocumentState($class, $document, self::STATE_DETACHED)) {
             case self::STATE_MANAGED:
                 $this->removeFromIdentityMap($document);
                 unset($this->documentInsertions[$oid], $this->documentUpdates[$oid],
@@ -2164,7 +2166,7 @@ class UnitOfWork implements PropertyChangedListener
         $visited[$oid] = $document; // mark visited
 
         $class = $this->dm->getClassMetadata(get_class($document));
-        if ($this->getDocumentState($document) == self::STATE_MANAGED) {
+        if ($this->getDocumentState($class, $document) == self::STATE_MANAGED) {
             $id = $class->getDatabaseIdentifierValue($this->documentIdentifiers[$oid]);
             $this->getDocumentPersister($class->name)->refresh($id, $document);
         } else {
@@ -2372,12 +2374,13 @@ class UnitOfWork implements PropertyChangedListener
      */
     public function lock($document, $lockMode, $lockVersion = null)
     {
-        if ($this->getDocumentState($document) != self::STATE_MANAGED) {
+        $documentName = get_class($document);
+
+        $class = $this->dm->getClassMetadata($documentName);
+
+        if ($this->getDocumentState($class, $document) != self::STATE_MANAGED) {
             throw new \InvalidArgumentException("Document is not MANAGED.");
         }
-
-        $documentName = get_class($document);
-        $class = $this->dm->getClassMetadata($documentName);
 
         if ($lockMode == LockMode::OPTIMISTIC) {
             if ( ! $class->isVersioned) {
@@ -2403,10 +2406,12 @@ class UnitOfWork implements PropertyChangedListener
      */
     public function unlock($document)
     {
-        if ($this->getDocumentState($document) != self::STATE_MANAGED) {
+        $documentName = get_class($document);
+        $class = $this->dm->getClassMetadata($documentName);
+
+        if ($this->getDocumentState($class, $document) != self::STATE_MANAGED) {
             throw new \InvalidArgumentException("Document is not MANAGED.");
         }
-        $documentName = get_class($document);
         $this->getDocumentPersister($documentName)->unlock($document);
     }
 
@@ -2552,7 +2557,7 @@ class UnitOfWork implements PropertyChangedListener
                 $overrideLocalValues = ! empty($hints[Query::HINT_REFRESH]);
             }
             if ($overrideLocalValues) {
-                $data = $this->hydratorFactory->hydrate($document, $data, $hints);
+                $data = $this->hydratorFactory->hydrate($class, $document, $data, $hints);
                 $this->originalDocumentData[$oid] = $data;
             }
         } else {
@@ -2561,7 +2566,7 @@ class UnitOfWork implements PropertyChangedListener
             $oid = spl_object_hash($document);
             $this->documentStates[$oid] = self::STATE_MANAGED;
             $this->identityMap[$class->rootDocumentName][$id] = $document;
-            $data = $this->hydratorFactory->hydrate($document, $data, $hints);
+            $data = $this->hydratorFactory->hydrate($class, $document, $data, $hints);
             $this->originalDocumentData[$oid] = $data;
         }
         return $document;
