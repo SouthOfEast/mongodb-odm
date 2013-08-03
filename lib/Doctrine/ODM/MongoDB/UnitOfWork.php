@@ -2444,12 +2444,14 @@ class UnitOfWork implements PropertyChangedListener
             $this->scheduledForDirtyCheck =
             $this->documentInsertions =
             $this->documentUpdates =
-            $this->documentDeletions =
-            $this->collectionUpdates =
-            $this->collectionDeletions =
+            $this->documentUpserts =
             $this->extraUpdates =
-            $this->parentAssociations =
-            $this->orphanRemovals = array();
+            $this->documentDeletions =
+            $this->collectionDeletions =
+            $this->collectionUpdates =
+            $this->visitedCollections =
+            $this->orphanRemovals =
+            $this->parentAssociations = array();
 
             if ($this->commitOrderCalculator !== null) {
                 $this->commitOrderCalculator->clear();
