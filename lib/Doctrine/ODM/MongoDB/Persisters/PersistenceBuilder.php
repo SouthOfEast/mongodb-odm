@@ -366,20 +366,21 @@ class PersistenceBuilder
      * @param object $embeddedDocument
      * @return array|object
      */
-    private function doPrepareEmbeddedDocumentValue(array $embeddedMapping, $embeddedDocument, $fromChangeSet = false)
+    private function doPrepareEmbeddedDocumentValue(array $embeddedMapping, $embeddedDocument, $fromChangeset = false)
     {
         $embeddedDocumentValue = array();
         $class = $this->dm->getClassMetadata(get_class($embeddedDocument));
 
-        if ($fromChangeSet) {
-            $loop = $this->uow->getDocumentChangeSet($embeddedDocument);
+        $changeset = $this->uow->getDocumentChangeSet($embeddedDocument);
+
+        if ($fromChangeset) {
+            $loop = $changeset;
         } else {
             $loop = $class->fieldMappings;
         }
 
-        foreach ($loop as $k => $v) {
-            if ($fromChangeSet) {
-                $fieldName = $k;
+        foreach ($loop as $fieldName => $v) {
+            if ($fromChangeset) {
                 $mapping = $class->fieldMappings[$fieldName];
                 $change = $v;
             } else {
@@ -391,11 +392,15 @@ class PersistenceBuilder
                 continue;
             }
 
-            if ($fromChangeSet) {
+            if ($fromChangeset) {
                 $rawValue = $change[1];
             } else {
-                // Inline ClassMetadataInfo::getFieldValue()
-                $rawValue = $class->reflFields[$mapping['fieldName']]->getValue($embeddedDocument);
+                if (isset($changeset[$mapping['fieldName']])) {
+                    $rawValue = $changeset[$mapping['fieldName']][1];
+                } else {
+                    // Inline ClassMetadataInfo::getFieldValue()
+                    $rawValue = $class->reflFields[$mapping['fieldName']]->getValue($embeddedDocument);
+                }
             }
 
             // Generate a document identifier
