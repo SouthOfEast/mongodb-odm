@@ -1550,7 +1550,9 @@ class UnitOfWork implements PropertyChangedListener
             $id = spl_object_hash($document);
         } else {
             $id = $this->documentIdentifiers[spl_object_hash($document)];
-            $id = $classMetadata->getPHPIdentifierValue($id);
+
+            $idType = $classMetadata->fieldMappings[$classMetadata->identifier]['type'];
+            $id = Type::getType($idType)->convertToPHPValue($id);
         }
         if ($id === '') {
             throw new \InvalidArgumentException("The given document has no identity.");
@@ -1646,7 +1648,8 @@ class UnitOfWork implements PropertyChangedListener
         $id = $this->documentIdentifiers[$oid];
 
         if ( ! $classMetadata->isEmbeddedDocument) {
-            $id = $classMetadata->getPHPIdentifierValue($id);
+            $idType = $classMetadata->fieldMappings[$classMetadata->identifier]['type'];
+            $id = Type::getType($idType)->convertToPHPValue($id);
         }
         if ($id === '') {
             throw new \InvalidArgumentException("The given document has no identity.");
@@ -1718,7 +1721,8 @@ class UnitOfWork implements PropertyChangedListener
         $classMetadata = $this->dm->getClassMetadata(get_class($document));
         $id = $this->documentIdentifiers[$oid];
         if ( ! $classMetadata->isEmbeddedDocument) {
-            $id = $classMetadata->getPHPIdentifierValue($id);
+            $idType = $classMetadata->fieldMappings[$classMetadata->identifier]['type'];
+            $id = Type::getType($idType)->convertToPHPValue($id);
         }
         if ($id === '') {
             return false;
@@ -2552,7 +2556,8 @@ class UnitOfWork implements PropertyChangedListener
             }
         }
 
-        $id = $class->getPHPIdentifierValue($data['_id']);
+        $idType = $class->fieldMappings[$class->identifier]['type'];
+        $id = Type::getType($idType)->convertToPHPValue($data['_id']);
         if (isset($this->identityMap[$class->rootDocumentName][$id])) {
             $document = $this->identityMap[$class->rootDocumentName][$id];
             $oid = spl_object_hash($document);

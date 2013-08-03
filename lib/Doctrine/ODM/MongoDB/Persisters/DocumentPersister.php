@@ -232,7 +232,11 @@ class DocumentPersister
 
             foreach ($inserts as $oid => $data) {
                 $document = $this->queuedInserts[$oid];
-                $postInsertIds[] = array($this->class->getPHPIdentifierValue($data['_id']), $document);
+
+                $idType = $this->class->fieldMappings[$this->class->identifier]['type'];
+                $postInsertId = Type::getType($idType)->convertToPHPValue($data['_id']);
+
+                $postInsertIds[] = array($postInsertId, $document);
             }
         }
 
@@ -669,7 +673,12 @@ class DocumentPersister
                 $className = $this->dm->getClassNameFromDiscriminatorValue($mapping, $reference);
                 $mongoId = $reference[$cmd . 'id'];
             }
-            $id = $this->dm->getClassMetadata($className)->getPHPIdentifierValue($mongoId);
+
+            $class = $this->dm->getClassMetadata($className);
+
+            $idType = $class->fieldMappings[$class->identifier]['type'];
+            $id = Type::getType($idType)->convertToPHPValue($mongoId);
+
             if ( ! $id) {
                 continue;
             }
