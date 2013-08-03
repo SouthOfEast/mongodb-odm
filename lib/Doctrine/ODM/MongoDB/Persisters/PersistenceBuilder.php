@@ -345,6 +345,15 @@ class PersistenceBuilder
         return $this->dm->createDBRef($document, $referenceMapping);
     }
 
+    public function prepareEmbeddedDocumentValue(array $embeddedMapping, $embeddedDocument)
+    {
+        if ($embeddedMapping['strategy'] === 'set') {
+            return $this->doPrepareEmbeddedDocumentValue($embeddedMapping, $embeddedDocument, false);
+        }
+
+        return $this->doPrepareEmbeddedDocumentValue($embeddedMapping, $embeddedDocument, true);
+    }
+
     /**
      * Returns the embedded document to be stored in MongoDB.
      *
@@ -357,19 +366,37 @@ class PersistenceBuilder
      * @param object $embeddedDocument
      * @return array|object
      */
-    public function prepareEmbeddedDocumentValue(array $embeddedMapping, $embeddedDocument)
+    private function doPrepareEmbeddedDocumentValue(array $embeddedMapping, $embeddedDocument, $fromChangeSet = false)
     {
         $embeddedDocumentValue = array();
         $class = $this->dm->getClassMetadata(get_class($embeddedDocument));
 
-        foreach ($class->fieldMappings as $mapping) {
+        if ($fromChangeSet) {
+            $loop = $this->uow->getDocumentChangeSet($embeddedDocument);
+        } else {
+            $loop = $class->fieldMappings;
+        }
+
+        foreach ($loop as $k => $v) {
+            if ($fromChangeSet) {
+                $fieldName = $k;
+                $mapping = $class->fieldMappings[$fieldName];
+                $change = $v;
+            } else {
+                $mapping = $v;
+            }
+
             // Skip notSaved fields
             if ( ! empty($mapping['notSaved'])) {
                 continue;
             }
 
-            // Inline ClassMetadataInfo::getFieldValue()
-            $rawValue = $class->reflFields[$mapping['fieldName']]->getValue($embeddedDocument);
+            if ($fromChangeSet) {
+                $rawValue = $change[1];
+            } else {
+                // Inline ClassMetadataInfo::getFieldValue()
+                $rawValue = $class->reflFields[$mapping['fieldName']]->getValue($embeddedDocument);
+            }
 
             // Generate a document identifier
             if ($rawValue === null && $class->identifier === $mapping['fieldName'] && !$class->isIdGeneratorNone()) {
