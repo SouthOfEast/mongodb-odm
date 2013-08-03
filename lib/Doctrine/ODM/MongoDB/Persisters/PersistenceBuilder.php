@@ -74,14 +74,15 @@ class PersistenceBuilder
         $changeset = $this->uow->getDocumentChangeSet($document);
 
         $insertData = array();
-        foreach ($class->fieldMappings as $mapping) {
+        foreach ($changeset as $fieldName => $change) {
+            $mapping = $class->fieldMappings[$fieldName];
 
             // many collections are inserted later
             if ($mapping['type'] === ClassMetadata::MANY) {
                 continue;
             }
 
-            $new = isset($changeset[$mapping['fieldName']][1]) ? $changeset[$mapping['fieldName']][1] : null;
+            $new = isset($change[1]) ? $change[1] : null;
 
             // Generate a document identifier
             if ($new === null && $class->identifier === $mapping['fieldName'] && $class->generatorType !== ClassMetadata::GENERATOR_TYPE_NONE) {
