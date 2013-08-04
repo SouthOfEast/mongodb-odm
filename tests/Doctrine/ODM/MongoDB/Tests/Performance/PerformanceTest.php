@@ -24,7 +24,6 @@ class PerformanceTest extends BaseTest
             $this->fail(
               sprintf(
                 'expected running time: <= %s but was: %s',
-
                 $this->maxRunningTime,
                 $time
               )
